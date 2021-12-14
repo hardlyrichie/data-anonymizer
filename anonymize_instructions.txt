@@ -1,0 +1,3 @@
+feedback2
+companies, name
+votes, timestamp, value
