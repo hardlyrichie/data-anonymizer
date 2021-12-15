@@ -38,14 +38,6 @@ class MySqlConnection:
         print('Performing categorical anonymization for', table_name, column_name)
         connection = self.connectDB()
         with connection.cursor() as cursor:
-            ## get data type of the original column
-            # cursor.execute(f"SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{table_name}' AND COLUMN_NAME = '{column_name}';")
-            # data_type = cursor.fetchone()['DATA_TYPE']
-
-            ## find the number of distinct values of a given column
-            # cursor.execute(f'SELECT COUNT(DISTINCT {column_name}) FROM {table_name};')
-            # n = cursor.fetchone()['COUNT(DISTINCT name)']
-
             # get all distinct values of a given column
             cursor.execute(f'SELECT DISTINCT {column_name} FROM {table_name} {"WHERE " + where_clause if where_clause else ""};')
             result = cursor.fetchall()
@@ -95,7 +87,6 @@ class MySqlConnection:
                 for i in range(len(all_values)):
                     cursor.execute(f'UPDATE {table_name} SET {column_name} = REPLACE({column_name}, "{all_values[i]}", "{all_values[i] + 10 * np.random.uniform(0, 1.1)}")')
 
-
         # commit changes
         connection.commit()
     
@@ -109,7 +100,7 @@ class MySqlConnection:
 
 if __name__ == "__main__":
     # TODO: Put copying database step in python multiprocessing queue so 
-    # that we can wait for it to finish before proceeding to transformations
+    # # that we can wait for it to finish before proceeding to transformations
     lines = []
     # Read from instruction file
     with open('anonymize_instructions.txt', 'r') as f:
@@ -137,39 +128,36 @@ if __name__ == "__main__":
     # with same name already exists
     anon = conn.cloneDB(f'{db_name}_anonymized')
 
-    # --------------
-    # lines = []
-    # # Read from instruction file
-    # with open('anonymize_instructions.txt', 'r') as f:
-    #     lines = f.readlines()
+    # -------- Currently have to manually switch between running copying or transformations by commenting out one section
+    lines = []
+    # Read from instruction file
+    with open('anonymize_instructions.txt', 'r') as f:
+        lines = f.readlines()
     
-    # # Get database, table, and columns to be anonymized
-    # table_and_cols = defaultdict(list) # key: table name, value: list of columns in table
-    # if len(lines) > 1:
-    #     lines = [line.rstrip() for line in lines]
-    #     db_name = lines[0]
-    #     for i in range(1, len(lines)):
-    #         names = lines[i].split(', ')
-    #         if len(names) > 1:
-    #             for cols in names[1:]:
-    #                 table_and_cols[names[0]].append(tuple(cols.split()))
-    # else:
-    #     raise ValueError('anonymize_instructions.txt is empty. Use this file to detail what to anonymize')
+    # Get database, table, and columns to be anonymized
+    table_and_cols = defaultdict(list) # key: table name, value: list of columns in table
+    if len(lines) > 1:
+        lines = [line.rstrip() for line in lines]
+        db_name = lines[0]
+        for i in range(1, len(lines)):
+            names = lines[i].split(', ')
+            if len(names) > 1:
+                for cols in names[1:]:
+                    table_and_cols[names[0]].append(tuple(cols.split()))
+    else:
+        raise ValueError('anonymize_instructions.txt is empty. Use this file to detail what to anonymize')
 
-    # db_pass = ''
-    # with open('password.txt', 'r') as f:
-    #     db_pass = f.read()
+    db_pass = ''
+    with open('password.txt', 'r') as f:
+        db_pass = f.read()
 
-    # anon = MySqlConnection('localhost', 'root', db_pass, f'{db_name}_anonymized')
+    anon = MySqlConnection('localhost', 'root', db_pass, f'{db_name}_anonymized')
 
-    # for table in table_and_cols:
-    #     for col in table_and_cols[table]:
-    #         if col[1] == 'categorical':
-    #             anon.randomizeCategorical(table, col[0], anon.getProvider(col[2]))
-    #         elif col[1] == 'numerical':
-    #             anon.randomizeNumerical(table, col[0])
-    #         else:
-    #             raise ValueError('Unknown column type. Must either be categorical or numerical')
-
-            
-    
+    for table in table_and_cols:
+        for col in table_and_cols[table]:
+            if col[1] == 'categorical':
+                anon.randomizeCategorical(table, col[0], anon.getProvider(col[2]))
+            elif col[1] == 'numerical':
+                anon.randomizeNumerical(table, col[0])
+            else:
+                 raise ValueError('Unknown column type. Must either be categorical or numerical')
