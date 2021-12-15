@@ -2,7 +2,7 @@ import pymysql
 import subprocess
 import numpy as np
 from faker import Faker
-
+from collections import defaultdict
 
 class MySqlConnection:
     def __init__(self, db_host, db_user, db_pass, db_name):
@@ -35,6 +35,7 @@ class MySqlConnection:
         return MySqlConnection(self.db_host, self.db_user, self.db_pass, database_name)
 
     def randomizeCategorical(self, table_name, column_name, faker_provider, where_clause=None):
+        print('Performing categorical anonymization for', table_name, column_name)
         connection = self.connectDB()
         with connection.cursor() as cursor:
             ## get data type of the original column
@@ -62,6 +63,7 @@ class MySqlConnection:
         connection.commit()
         
     def randomizeNumerical(self, table_name, column_name, preserve_distr=False):
+        print('Performing numerical anonymization for', table_name, column_name)
         connection = self.connectDB()
         with connection.cursor() as cursor:
             ## just generate one value and apply it everywhere
@@ -96,39 +98,33 @@ class MySqlConnection:
 
         # commit changes
         connection.commit()
-
-
-## RUN BELOW ONLY ONCE
-# new_connection = connection.cloneDB('feedback2')
-
-# connection.randomizeCategorical('companies', 'name', connection.faker.company)
-connection.randomizeNumerical('votes', 'value')
-
-'''
-Output: Copy of database with specified tables/rows anonymized through data masking
-TODO:
-- Connect to database with pymysql
-- Create copy of database
-- Update/Anonymize specified table (build and perform update query on copy_table)
-
-Then in demo show aggregation functions produce same result (distribution remains the same)
-'''
+    
+    def getProvider(self, name):
+        if name == 'person':
+            return self.faker.name
+        if name == 'company':
+            return self.faker.company
+        if name == 'date_time':
+            return self.faker.date
 
 if __name__ == "__main__":
+    # TODO: Put copying database step in python multiprocessing queue so 
+    # that we can wait for it to finish before proceeding to transformations
     lines = []
     # Read from instruction file
     with open('anonymize_instructions.txt', 'r') as f:
         lines = f.readlines()
     
     # Get database, table, and columns to be anonymized
-    table_and_cols = {} # key: table name, value: list of columns in table
+    table_and_cols = defaultdict(list) # key: table name, value: list of columns in table
     if len(lines) > 1:
         lines = [line.rstrip() for line in lines]
         db_name = lines[0]
         for i in range(1, len(lines)):
             names = lines[i].split(', ')
             if len(names) > 1:
-                table_and_cols[names[0]] = names[1:]
+                for cols in names[1:]:
+                    table_and_cols[names[0]].append(tuple(cols.split()))
     else:
         raise ValueError('anonymize_instructions.txt is empty. Use this file to detail what to anonymize')
 
@@ -136,5 +132,44 @@ if __name__ == "__main__":
     with open('password.txt', 'r') as f:
         db_pass = f.read()
     conn = MySqlConnection('localhost', 'root', db_pass, db_name)
+    # Creates clone to apply data anonymization on. 
+    # If database already exits, user should drop it first. Currently does not check if databse
+    # with same name already exists
     anon = conn.cloneDB(f'{db_name}_anonymized')
+
+    # --------------
+    # lines = []
+    # # Read from instruction file
+    # with open('anonymize_instructions.txt', 'r') as f:
+    #     lines = f.readlines()
+    
+    # # Get database, table, and columns to be anonymized
+    # table_and_cols = defaultdict(list) # key: table name, value: list of columns in table
+    # if len(lines) > 1:
+    #     lines = [line.rstrip() for line in lines]
+    #     db_name = lines[0]
+    #     for i in range(1, len(lines)):
+    #         names = lines[i].split(', ')
+    #         if len(names) > 1:
+    #             for cols in names[1:]:
+    #                 table_and_cols[names[0]].append(tuple(cols.split()))
+    # else:
+    #     raise ValueError('anonymize_instructions.txt is empty. Use this file to detail what to anonymize')
+
+    # db_pass = ''
+    # with open('password.txt', 'r') as f:
+    #     db_pass = f.read()
+
+    # anon = MySqlConnection('localhost', 'root', db_pass, f'{db_name}_anonymized')
+
+    # for table in table_and_cols:
+    #     for col in table_and_cols[table]:
+    #         if col[1] == 'categorical':
+    #             anon.randomizeCategorical(table, col[0], anon.getProvider(col[2]))
+    #         elif col[1] == 'numerical':
+    #             anon.randomizeNumerical(table, col[0])
+    #         else:
+    #             raise ValueError('Unknown column type. Must either be categorical or numerical')
+
+            
     

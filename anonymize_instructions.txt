@@ -1,3 +1,4 @@
-feedback2
-companies, name
-votes, timestamp, value
+feedback
+companies, name categorical company
+votes, value numerical
+devices, installed categorical date_time
